@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Catálogo Multiverso | API Gateway</title>
+  <style>
+    :root { color-scheme: light; --ink:#172235; --muted:#68758a; --line:#dce3ec; --paper:#f4f7fb; --card:#fff; --accent:#176b61; --accent-soft:#e2f3ef; --danger:#9d2c38; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    button,input { font:inherit; }
+    button { cursor:pointer; }
+    .shell { max-width:1100px; margin:auto; padding:28px 20px 64px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:28px; }
+    .brand { display:flex; gap:13px; align-items:center; }
+    .mark { display:grid; width:44px; height:44px; place-items:center; border-radius:14px; background:var(--accent); color:white; font-weight:800; }
+    h1,h2,h3,p { margin-top:0; }
+    h1 { margin-bottom:2px; font-size:1.25rem; }
+    .subtitle,.muted { color:var(--muted); }
+    .panel { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:24px; box-shadow:0 10px 28px #1722350a; }
+    .login { max-width:440px; margin:8vh auto; }
+    .login h2 { margin-bottom:5px; font-size:1.55rem; }
+    label { display:block; margin:16px 0 6px; font-weight:650; }
+    input { width:100%; border:1px solid var(--line); border-radius:10px; padding:11px 12px; color:var(--ink); background:white; }
+    input:focus { outline:3px solid #176b6125; border-color:var(--accent); }
+    .primary,.secondary,.link-button { border:0; border-radius:10px; padding:10px 14px; font-weight:700; }
+    .primary { width:100%; margin-top:20px; background:var(--accent); color:white; }
+    .secondary { background:#eaf0f5; color:var(--ink); }
+    .link-button { background:var(--accent-soft); color:var(--accent); padding:8px 11px; }
+    button:hover { filter:brightness(.96); }
+    .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .page-head { display:flex; flex-wrap:wrap; align-items:end; justify-content:space-between; gap:16px; margin:0 0 18px; }
+    .page-head h2 { margin-bottom:3px; font-size:1.65rem; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
+    .item { display:flex; min-height:142px; gap:14px; padding:14px; border:1px solid var(--line); border-radius:14px; background:white; }
+    .item img { width:82px; height:82px; object-fit:cover; border-radius:12px; background:#eef2f6; }
+    .item h3 { margin:3px 0 8px; line-height:1.25; }
+    .item .muted { font-size:.9rem; }
+    .item-main { min-width:0; }
+    .attrs { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin:20px 0; }
+    .attr { padding:12px; border-radius:11px; background:#f4f7fb; }
+    .attr strong { display:block; margin-bottom:4px; font-size:.86rem; color:var(--muted); text-transform:capitalize; }
+    .notice { margin:0 0 16px; padding:11px 13px; border-radius:10px; background:#fff2e6; color:#754514; }
+    .error { color:var(--danger); }
+    .hidden { display:none !important; }
+    .breadcrumbs { margin:0 0 15px; }
+    .back { border:0; background:none; padding:0; color:var(--accent); font-weight:700; }
+    @media(max-width:600px) { .shell{padding:18px 14px 44px}.panel{padding:18px}header{align-items:flex-start}.item{min-height:unset} }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="brand">
+        <div class="mark" aria-hidden="true">MG</div>
+        <div><h1>Catálogo Multiverso</h1><div class="subtitle">Navegação pelo API Gateway</div></div>
+      </div>
+      <button id="logout" class="secondary hidden" type="button">Sair</button>
+    </header>
+
+    <section id="login-panel" class="panel login">
+      <h2>Entrar no gateway</h2>
+      <p class="muted">Use as credenciais configuradas ao iniciar a aplicação.</p>
+      <form id="login-form">
+        <p id="login-error" class="error" role="alert"></p>
+        <label for="username">Usuário</label>
+        <input id="username" name="username" autocomplete="username" required>
+        <label for="password">Senha</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button class="primary" type="submit">Entrar</button>
+      </form>
+    </section>
+
+    <section id="app-panel" class="hidden">
+      <div id="message" class="notice hidden" role="status"></div>
+      <nav id="breadcrumbs" class="breadcrumbs toolbar" aria-label="Navegação"></nav>
+      <div id="content" class="panel" aria-live="polite"></div>
+    </section>
+  </main>
+  <script>
+    const loginPanel = document.querySelector('#login-panel');
+    const appPanel = document.querySelector('#app-panel');
+    const content = document.querySelector('#content');
+    const message = document.querySelector('#message');
+    const breadcrumbs = document.querySelector('#breadcrumbs');
+    const logoutButton = document.querySelector('#logout');
+    let token = null;
+    let rootHref = null;
+
+    document.querySelector('#login-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      document.querySelector('#login-error').textContent='';
+      const form = new FormData(event.currentTarget);
+      try {
+        const response = await fetch('/auth/login', {
+          method: 'POST', headers: {'Content-Type':'application/json', 'Accept':'application/hal+json'},
+          body: JSON.stringify({username:form.get('username'), password:form.get('password')})
+        });
+        if (!response.ok) throw new Error('Usuário ou senha inválidos.');
+        const data = await response.json();
+        token = data.token;
+        rootHref = data._links?.root?.href;
+        if (!rootHref) throw new Error('O gateway não retornou o link da raiz.');
+        loginPanel.classList.add('hidden'); appPanel.classList.remove('hidden'); logoutButton.classList.remove('hidden');
+        await follow(rootHref, 'root');
+      } catch (error) { document.querySelector('#login-error').textContent=error.message; }
+    });
+
+    logoutButton.addEventListener('click', logout);
+    breadcrumbs.addEventListener('click', handleLinkClick);
+    content.addEventListener('click', handleLinkClick);
+
+    async function handleLinkClick(event) {
+      const button = event.target.closest('[data-href]');
+      if (!button) return;
+      event.preventDefault();
+      await follow(button.dataset.href, button.dataset.rel, button.dataset.title);
+    }
+
+    async function follow(href, relation, title) {
+      clearMessage();
+      content.innerHTML = '<p class="muted">Carregando…</p>';
+      try {
+        const response = await fetch(href, {headers:{'Authorization':`Bearer ${token}`, 'Accept':'application/hal+json'}});
+        if (response.status === 401) { logout('Sessão expirada. Entre novamente.'); return; }
+        if (!response.ok) {
+          const problem = await response.json().catch(() => ({}));
+          throw new Error(problem.detail || `Falha ao consultar o gateway (HTTP ${response.status}).`);
+        }
+        const data = await response.json();
+        render(data, relation, title);
+      } catch (error) { showMessage(error.message); content.innerHTML = ''; }
+    }
+
+    function render(data, relation, title) {
+      breadcrumbs.replaceChildren();
+      if (rootHref && relation !== 'root') addNavButton(breadcrumbs, 'Início', rootHref, 'root');
+      addNavButton(breadcrumbs, relationTitle(relation, title, data), null, relation);
+      content.replaceChildren();
+      if (data._embedded) return renderCollection(data, relation, title);
+      if (data.id !== undefined) return renderItem(data, relation);
+      renderLinks(data, relation);
+    }
+
+    function renderLinks(data, relation) {
+      const heading = document.createElement('div'); heading.className = 'page-head';
+      const title = document.createElement('div');
+      const h2 = document.createElement('h2'); h2.textContent = relation === 'root' ? 'Escolha uma fonte' : (data.fonte || 'Recursos');
+      const p = document.createElement('p'); p.className='muted'; p.textContent = 'Siga os links para navegar pelos recursos disponíveis.';
+      title.append(h2,p); heading.append(title); content.append(heading);
+      const links = data._links || {};
+      const tools = document.createElement('div'); tools.className='toolbar';
+      for (const [rel, value] of Object.entries(links)) {
+        if (['self','root'].includes(rel) || !value?.href) continue;
+        addNavButton(tools, value.title || relationTitle(rel), value.href, rel);
+      }
+      content.append(tools);
+    }
+
+    function renderCollection(data, relation, titleText) {
+      const collectionName = Object.keys(data._embedded)[0];
+      const records = data._embedded[collectionName] || [];
+      const heading = document.createElement('div'); heading.className='page-head';
+      const title = document.createElement('div');
+      const h2 = document.createElement('h2'); h2.textContent=titleText || relationTitle(collectionName);
+      const p = document.createElement('p'); p.className='muted';
+      const page = data.page || {};
+      p.textContent = page.totalElements === undefined ? `${records.length} resultados` : `${page.totalElements} resultados · página ${(page.number ?? 0)+1} de ${page.totalPages}`;
+      title.append(h2,p); heading.append(title); content.append(heading);
+      const tools=document.createElement('div'); tools.className='toolbar';
+      for (const rel of ['first','prev','next','last']) {
+        const link=data._links?.[rel]; if (link?.href) addNavButton(tools, relationTitle(rel), link.href, rel);
+      }
+      if (tools.childElementCount) { tools.style.marginBottom='18px'; content.append(tools); }
+      const grid=document.createElement('div'); grid.className='grid';
+      records.forEach(record => {
+        const item=document.createElement('article'); item.className='item';
+        if (record.imagem) { const img=document.createElement('img'); img.src=record.imagem; img.alt=''; img.loading='lazy'; item.append(img); }
+        const main=document.createElement('div'); main.className='item-main';
+        const name=document.createElement('h3'); name.textContent=record.nome || `Item ${record.id}`;
+        const details=document.createElement('p'); details.className='muted'; details.textContent=summary(record.atributos);
+        main.append(name,details);
+        const self=record._links?.self;
+        if (self) { const open=makeButton('Ver detalhes',self.href,'self'); open.style.marginTop='5px'; main.append(open); }
+        item.append(main); grid.append(item);
+      });
+      content.append(grid);
+      const sourceLink=data._links?.source;
+      if (sourceLink) { const back=makeButton('Voltar à fonte',sourceLink.href,'source'); back.style.marginTop='20px'; content.append(back); }
+    }
+
+    function renderItem(data, relation) {
+      const heading=document.createElement('div'); heading.className='page-head';
+      const h2=document.createElement('h2'); h2.textContent=data.nome || `Item ${data.id}`;
+      const p=document.createElement('p'); p.className='muted'; p.textContent=`${data.fonte || ''} · #${data.id}`;
+      const title=document.createElement('div'); title.append(h2,p); heading.append(title); content.append(heading);
+      if (data.imagem) { const img=document.createElement('img'); img.src=data.imagem; img.alt='Imagem de '+(data.nome||''); img.style.cssText='width:min(220px,100%);border-radius:14px'; content.append(img); }
+      const attrs=document.createElement('div'); attrs.className='attrs';
+      for (const [key,value] of Object.entries(data.atributos || {})) {
+        const box=document.createElement('div'); box.className='attr';
+        const label=document.createElement('strong'); label.textContent=key.replaceAll('_',' ');
+        const val=document.createElement('span'); val.textContent=Array.isArray(value)?value.join(', '):String(value);
+        box.append(label,val); attrs.append(box);
+      }
+      if (attrs.childElementCount) content.append(attrs);
+      const links=document.createElement('div'); links.className='toolbar';
+      for (const [rel,link] of Object.entries(data._links || {})) {
+        if (rel === 'self' || !link?.href) continue;
+        addNavButton(links, link.title || relationTitle(rel), link.href, rel);
+      }
+      if (links.childElementCount) { const navTitle=document.createElement('h3'); navTitle.textContent='Navegação relacionada'; content.append(navTitle,links); }
+    }
+
+    function summary(attributes={}) {
+      return Object.entries(attributes).filter(([key])=>!['phrases','description','synopsis'].includes(key))
+        .slice(0,2).map(([key,value])=>`${key.replaceAll('_',' ')}: ${Array.isArray(value)?value.join(', '):value}`).join(' · ') || 'Abrir para ver detalhes';
+    }
+    function addNavButton(parent,label,href,rel='') {
+      if (!href) return;
+      parent.append(makeButton(label,href,rel));
+    }
+    function makeButton(label,href,rel) {
+      const button=document.createElement('button'); button.type='button'; button.className='link-button';
+      button.textContent=label; button.dataset.href=href; button.dataset.rel=rel; return button;
+    }
+    function relationTitle(relation,title,data) {
+      if (title) return title;
+      if (data?.fonte && relation !== 'root') return data.fonte;
+      return ({rickandmorty:'Rick and Morty',simpsons:'Os Simpsons',characters:'Personagens',episodes:'Episódios',locations:'Locais',first:'Primeira',prev:'Anterior',next:'Próxima',last:'Última',root:'Início',source:'Fonte',collection:'Coleção',character:'Personagem',episode:'Episódio',location:'Local'})[relation] || relation || 'Recurso';
+    }
+    function showMessage(text) { message.textContent=text; message.classList.remove('hidden'); }
+    function clearMessage() { message.textContent=''; message.classList.add('hidden'); }
+    function logout(note) {
+      token=null; rootHref=null; appPanel.classList.add('hidden'); logoutButton.classList.add('hidden'); loginPanel.classList.remove('hidden');
+      content.replaceChildren(); breadcrumbs.replaceChildren(); if (note) showMessage(note);
+    }
+  </script>
+</body>
+</html>
